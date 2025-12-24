@@ -8,26 +8,44 @@
         body { margin: 0; overflow: hidden; background-color: #000; touch-action: none; }
         #text {
             position: absolute; 
-            top: 10%; /* MOVED TO TOP */
+            top: 10%; 
             width: 100%; text-align: center;
             color: #ffca28; font-family: 'Georgia', serif; font-style: italic; font-size: 2.5rem;
-            text-shadow: 0 0 15px #ff6f00, 0 0 30px #ff0000; opacity: 0; transition: opacity 2s;
+            text-shadow: 0 0 10px #ff6f00; 
+            opacity: 0; transition: opacity 2s;
             pointer-events: none;
-            z-index: 10; /* Ensure it's on top of snow */
+            z-index: 10; 
+        }
+
+        #hint {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            color: #888; font-family: sans-serif; font-size: 0.8rem; opacity: 0.7;
+            pointer-events: none; transition: opacity 1s;
         }
     </style>
 </head>
 <body>
     <div id="text">Merry Christmas from Char</div>
+    <div id="hint">Tap anywhere for Music ♫</div>
 
     <script type="module">
         import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
+        // --- 1. MUSIC SETUP ---
+        const audio = new Audio('music.mp3'); 
+        audio.loop = true; 
+        audio.volume = 0.6;
+        
+        window.addEventListener('click', () => {
+            audio.play().catch(e => { console.log("Audio waiting for interaction"); });
+            document.getElementById('hint').style.opacity = 0; 
+        });
+
         // --- CONFIGURATION ---
         const PARTICLE_COUNT = 18000; 
-        const RESERVE_COUNT = 6000;   // Finale particles
+        const RESERVE_COUNT = 6000;   
         const HEART_COUNT = 2000;     
-        const SNOW_COUNT = 3000;      // Snow particles
+        const SNOW_COUNT = 3000;      
         
         const CAM_DIST = 70;
 
@@ -40,10 +58,24 @@
         
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio); 
         document.body.appendChild(renderer.domElement);
 
+        // --- SHARP TEXTURE (No blur) ---
         function getTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(16, 16, 14, 0, Math.PI * 2); 
+            ctx.fill();
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function getGlowTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 32; canvas.height = 32;
             const ctx = canvas.getContext('2d');
@@ -56,7 +88,7 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // --- MAIN SYSTEM (Fireworks, Tree, Heart) ---
+        // --- MAIN SYSTEM ---
         const geo = new THREE.BufferGeometry();
         const pos = new Float32Array(PARTICLE_COUNT * 3);
         const sizes = new Float32Array(PARTICLE_COUNT);
@@ -66,12 +98,10 @@
         const galaxyTargets = [];
         const heartTargets = [];
 
-        // PALETTES
         const goldPalette = [ new THREE.Color('#FFD700'), new THREE.Color('#FFA500'), new THREE.Color('#FF8C00') ];
         const whitePalette = [ new THREE.Color('#FFFFFF'), new THREE.Color('#F0F8FF') ];
         const heartPalette = [ new THREE.Color('#FF0000'), new THREE.Color('#DC143C') ]; 
 
-        // HEART SHAPE
         function getHeartOutline(angle) {
             const x = 16 * Math.pow(Math.sin(angle), 3);
             const y = 13 * Math.cos(angle) - 5 * Math.cos(2 * angle) - 2 * Math.cos(3 * angle) - Math.cos(4 * angle);
@@ -85,19 +115,15 @@
             let dest = 'RESERVE'; 
             let c;
 
-            // Permanent Structures
             if (i < STRUCTURE_COUNT) {
                 let isHeart = i >= (STRUCTURE_COUNT - HEART_COUNT);
                 let isTree = !isHeart && (Math.random() > 0.4);
-                
                 dest = isHeart ? 'HEART' : (isTree ? 'TREE' : 'RING');
                 
                 if (isHeart) c = heartPalette[Math.floor(Math.random()*heartPalette.length)];
                 else if (isTree) c = goldPalette[Math.floor(Math.random()*goldPalette.length)];
                 else c = whitePalette[Math.floor(Math.random()*whitePalette.length)];
-                
             } else {
-                // Finale Reserve
                 dest = 'RESERVE';
                 c = (Math.random()>0.5) ? goldPalette[0] : whitePalette[0];
             }
@@ -128,13 +154,12 @@
             const ta = Math.random() * Math.PI * 2;
             treeTargets[i] = {x: Math.cos(ta)*tr, y: treeY, z: Math.sin(ta)*tr, h: h};
 
-            // HEART (Scale 0.2)
+            // HEART
             if (dest === 'HEART') {
                 const t = Math.random() * Math.PI * 2;
                 const pt = getHeartOutline(t);
                 const fillScale = Math.sqrt(Math.random()); 
                 const scale = 0.2; 
-                
                 heartTargets[i] = {
                     x: pt.x * scale * fillScale, 
                     y: 33 + (pt.y * scale * fillScale), 
@@ -154,9 +179,13 @@
         geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
         const mat = new THREE.PointsMaterial({
-            size: 1.5, map: getTexture(), 
-            vertexColors: true, blending: THREE.AdditiveBlending, 
-            depthWrite: false, transparent: true
+            size: 0.5, // <--- TINY DUST SIZE
+            map: getTexture(), 
+            vertexColors: true, 
+            blending: THREE.AdditiveBlending, 
+            depthWrite: false, 
+            transparent: true,
+            opacity: 1.0 
         });
         const system = new THREE.Points(geo, mat);
         scene.add(system);
@@ -177,12 +206,17 @@
         }
         snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
         const snowMat = new THREE.PointsMaterial({
-            size: 1.2, color: 0xffffff, map: getTexture(), 
-            blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7
+            size: 1.5,                     // adjust for snow size
+            color: 0xffffff,
+            map: getGlowTexture(),          // <-- glow texture here
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
+
         const snowSystem = new THREE.Points(snowGeo, snowMat);
         scene.add(snowSystem);
-
 
         const orbGeo = new THREE.BufferGeometry();
         const orbPos = new Float32Array(6);
@@ -217,7 +251,7 @@
                     data[i].vy = 0.7+Math.random()*0.4; 
                     data[i].vz = (Math.random()-0.5)*0.25;
                     data[i].targetH = h;
-                    sizes[i] = 2.0;
+                    // sizes[i] = 1.0; // Dynamic size removed to keep uniform dust look
                     count++;
                 }
             }
@@ -242,7 +276,6 @@
                     data[i].vy = 0.8+Math.random()*0.5; 
                     data[i].vz = (Math.random()-0.5)*0.35;
                     data[i].targetH = h;
-                    sizes[i] = 2.5;
                     count++;
                 }
             }
@@ -262,14 +295,13 @@
                 launchFinale(); nextFinaleTime = time + 0.15; 
             }
 
-            // 3. SNOW ANIMATION
+            // 3. SNOW
             for(let i=0; i<SNOW_COUNT; i++) {
                 let sy = snowPos[i*3+1];
                 const v = snowVel[i];
                 sy += v.vy;
                 snowPos[i*3] += v.vx + Math.sin(time + i*0.1)*0.01;
                 snowPos[i*3+2] += v.vz + Math.cos(time + i*0.1)*0.01;
-                
                 if (sy < -12) {
                     sy = 150; 
                     snowPos[i*3] = (Math.random() - 0.5) * 250;
@@ -279,8 +311,7 @@
             }
             snowGeo.attributes.position.needsUpdate = true;
 
-
-            // 4. MAIN SYSTEM ANIMATION
+            // 4. PARTICLES
             for(let i=0; i<PARTICLE_COUNT; i++) {
                 const d = data[i];
                 let x=pos[i*3], y=pos[i*3+1], z=pos[i*3+2];
@@ -289,7 +320,6 @@
                     d.state = 'GALAXY';
                     const gt = galaxyTargets[i];
                     x = gt.x; y = -10; z = gt.z;
-                    sizes[i] = 1.2;
                 }
 
                 if(d.state === 'ROCKET') {
@@ -298,17 +328,16 @@
                         d.state='EXPLODE'; 
                         const s=0.3+Math.random()*0.6; const a=Math.random()*6.28; const b=Math.random()*3.14;
                         d.vx=Math.sin(b)*Math.cos(a)*s; d.vy=Math.cos(b)*s; d.vz=Math.sin(b)*Math.sin(a)*s;
-                        sizes[i]=3.0; 
                     }
                 }
                 else if(d.state === 'EXPLODE') {
                     x+=d.vx; y+=d.vy; z+=d.vz; d.vy-=0.015; d.vx*=0.95; d.vy*=0.95; d.vz*=0.95;
                     
                     if(time > T_FINALE_START) {
-                        if(y < -20) { d.state='IDLE'; sizes[i]=0; y=-100;}
+                        if(y < -20) { d.state='IDLE'; y=-100;}
                     } else {
                         if(time > T_INTRO) d.state='GALAXY';
-                        if(y < -20) { d.state='IDLE'; sizes[i]=0; y=-100; }
+                        if(y < -20) { d.state='IDLE'; y=-100; }
                     }
                 }
                 else if(d.state === 'GALAXY') {
@@ -318,9 +347,7 @@
                     const tz = Math.sin(gt.angle + spin) * gt.radius;
                     const wave = Math.sin(time * 1.0 - gt.ringOffset) * 0.4; 
                     const ty = -10 + wave;
-                    
                     x += (tx - x) * 0.1; y += (ty - y) * 0.1; z += (tz - z) * 0.1;
-                    sizes[i] = 1.5;
 
                     if(time > T_TREE && d.dest === 'TREE') d.state = 'TREE';
                     if(time > T_HEART && d.dest === 'HEART') d.state = 'HEART';
@@ -348,17 +375,14 @@
                     const rot = time * 0.8;
                     const fx = ht.x * Math.cos(rot) - ht.z * Math.sin(rot);
                     const fz = ht.x * Math.sin(rot) + ht.z * Math.cos(rot);
-                    
                     x += (fx - x) * 0.12;
                     y += (ht.y - y) * 0.12;
                     z += (fz - z) * 0.12;
-                    sizes[i] = 5.0;
                 }
 
                 pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
             }
             geo.attributes.position.needsUpdate=true;
-            geo.attributes.size.needsUpdate=true;
 
             if(time > T_TREE && time < T_HEART) {
                 orbs.visible = true;
