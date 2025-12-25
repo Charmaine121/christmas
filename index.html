@@ -36,10 +36,20 @@
         audio.loop = true; 
         audio.volume = 0.6;
         
-        window.addEventListener('click', () => {
-            audio.play().catch(e => { console.log("Audio waiting for interaction"); });
-            document.getElementById('hint').style.opacity = 0; 
-        });
+        const startMusic = () => {
+            audio.play().then(() => {
+                document.getElementById('hint').style.opacity = 0;
+                // Stop listening once the music starts
+                window.removeEventListener('click', startMusic);
+                window.removeEventListener('touchstart', startMusic);
+            }).catch(e => { 
+                console.log("Waiting for user tap..."); 
+            });
+        };
+
+        // Listen for standard click AND mobile touch
+        window.addEventListener('click', startMusic);
+        window.addEventListener('touchstart', startMusic);
 
         // --- CONFIGURATION ---
         const PARTICLE_COUNT = 18000; 
@@ -408,3 +418,4 @@
     </script>
 </body>
 </html>
+
